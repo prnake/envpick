@@ -123,6 +123,13 @@ pub enum Command {
     /// 打开 TUI
     Ui,
 
+    /// 检查并安装最新版本（覆盖当前二进制）
+    Update {
+        /// 忽略版本比较，强制重装
+        #[arg(long)]
+        force: bool,
+    },
+
     /// 内部命令：shell 集成用它取得可 eval 的片段
     #[command(name = "__shell", hide = true)]
     Shell { args: Vec<String> },

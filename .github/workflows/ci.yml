@@ -1,0 +1,48 @@
+# 每次 push / PR 的检查。
+#
+# 跑在 macOS 上不是随便选的：shell 集成的测试会真的起一个 POSIX shell，
+# 而 release 发布的是 macOS / Linux 两边的二进制。macOS 这一份跑得通，
+# Linux 那一份就交给 release 时构建。
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: rustup show
+
+      # fmt 和 clippy 先跑：这两个失败的原因一眼可见，没必要等编译完才说。
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      # 测试全程离线（HTTP 用手写的 mock server），所以这一步不需要网络凭据，
+      # 也不会因为 GitHub 慢而红。
+      - name: Release build
+        run: cargo build --release
+
+      # 安装脚本的语法自检 —— 它自己就是被 curl | bash 执行的东西，
+      # 坏掉的语法会在别人的机器上才暴露。
+      - name: Install script syntax
+        run: bash -n install.sh
+
+      - name: Smoke
+        run: |
+          ./target/release/envpick --version
+          ./target/release/envpick --help >/dev/null

@@ -33,24 +33,37 @@ $ ep off
 
 ## 安装
 
-```sh
-git clone <this repo> && cd env-management
-cargo install --path .          # 装到 ~/.cargo/bin/envpick
-```
-
-或者用附带的脚本（单条命令，装完提示 shell 集成怎么加）：
+一行装最新版（预编译二进制，装到 `~/.local/bin`）：
 
 ```sh
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/prnake/envpick/main/install.sh | bash
 ```
 
-只想要一个能直接跑的二进制：
+或者从源码编译：
 
 ```sh
-cargo build --release           # 产物在 target/release/envpick
+git clone https://github.com/prnake/envpick && cd envpick
+./install.sh                    # 编译并装到 ~/.local/bin
+# 或 cargo install --path .     # 装到 ~/.cargo/bin
 ```
 
-需要 Rust 1.85+（本项目用 2024 edition 编译）。
+`PREFIX=/usr/local/bin ./install.sh` 可以装到别处。下载安装会**强制校验
+SHA256**：装进去的东西每次开 shell 都会跑，缺校验和就宁可失败，不装没校验过的
+二进制。脚本只装二进制，不改你的 rc 文件。
+
+### 升级
+
+```sh
+envpick update          # 检查并安装最新 release（覆盖当前二进制）
+envpick update --force  # 忽略版本比较，强制重装
+```
+
+另外，任何命令启动时如果发现新版，会在 stderr 打一行提示。这个检查按天缓存
+（`~/Library/Caches/envpick/update-check`），失败时一小时后再试 —— 离线过的机器
+不该整天以为自己是最新的。`ENVPICK_NO_UPDATE_CHECK=1` 可以完全关掉。
+
+> 更新只走 `envpick update` 这一条路，不会自动发生。一个会在你没看着的时候
+> 重写自己的工具，比一个稍微旧一点的工具危险得多。
 
 ## Shell 集成
 
@@ -294,7 +307,11 @@ ep edit                         用 $EDITOR 打开 profiles.toml
 ep sync [status|push|pull|init|genid|url|delete]
 ep sync --keep-local / --keep-remote
 ep ui                           打开 TUI
+ep update [--force]             升级到最新 release
 ```
+
+`ep update` 要用完整命令名 `envpick update` —— shell 集成里的 `ep` 只特判
+`use` / `unuse` / `off` 三个动词，其余原样转发给二进制，所以两个名字都能用。
 
 ## 文件位置
 
@@ -303,11 +320,15 @@ ep ui                           打开 TUI
 | `~/.config/envpick/settings.toml` | 设备 ID、同步 ID、**密钥**、远端状态 | **否** |
 | `~/.config/envpick/profiles.toml` | profile 定义 | 是（加密后） |
 | `~/.config/envpick/profiles.toml.tmp` | 原子写的临时文件，进程在中途被杀时可能留下 | — |
+| `~/Library/Caches/envpick/update-check` | 版本检查的缓存（两行：时间戳、tag） | — |
 
 配置目录遵循 `$ENVPICK_CONFIG_DIR` → `$XDG_CONFIG_HOME/envpick` → 平台默认目录。
 `profiles.toml`（唯一装着你手写内容的文件）用「临时文件 + rename」写入，
 写到一半崩了也不会截断你的 profile。看到 `.tmp` 残留说明上次写入被中断，
 `profiles.toml` 本身仍是完整的。
+
+版本检查的缓存**刻意不放在配置目录**：配置目录是会被同步、会被备份的东西，
+而缓存两样都不是。
 
 ## 激活是怎么还原的
 

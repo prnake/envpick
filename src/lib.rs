@@ -11,6 +11,7 @@
 //! - [`sync`]     — HKDF/AES-GCM crypto and the pastebin transport
 //! - [`text`]     — every user-facing string
 //! - [`tui`]      — the interactive interface
+//! - [`update`]   — checking GitHub for, and installing, a newer release
 
 pub mod cli;
 pub mod clock;
@@ -21,6 +22,7 @@ pub mod shell;
 pub mod sync;
 pub mod text;
 pub mod tui;
+pub mod update;
 
 #[cfg(test)]
 pub mod testing;

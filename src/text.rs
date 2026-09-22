@@ -34,6 +34,18 @@ pub mod messages {
     pub const PULLED: &str = "已从远端拉取";
     pub const ACTIVATED: &str = "已激活";
     pub const DEACTIVATED: &str = "已撤销";
+
+    /// The version notice. Deliberately not a warning: running an older release
+    /// is a normal state of affairs, not something to alarm anyone about.
+    pub fn update_available(latest: &str, current: &str) -> String {
+        format!("有新版 {latest}（当前 {current}）：envpick update")
+    }
+
+    pub const ALREADY_LATEST: &str = "已是最新版本";
+    /// Only for the case where the repository answered "nothing published".
+    /// Network and lookup failures have their own, more specific messages and
+    /// must not be flattened into this one.
+    pub const UPDATE_NO_RELEASES: &str = "仓库还没有发布过 release，没有可安装的版本";
 }
 
 pub mod prompts {

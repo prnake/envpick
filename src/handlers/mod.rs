@@ -4,6 +4,7 @@ pub mod profile;
 pub mod shell_cmd;
 pub mod sync_cmd;
 pub mod ui;
+pub mod update_cmd;
 
 use anyhow::Result;
 
@@ -55,6 +56,14 @@ impl Ctx {
 }
 
 pub fn dispatch(cli: Cli) -> Result<()> {
+    // Printed before the command runs, so a long `sync` does not bury it, and
+    // only for the commands where the user asked for something else — `update`
+    // and `--version` speak for themselves. Best effort throughout: this must
+    // never be the reason a command fails.
+    if let Some(notice) = crate::update::update_notice() {
+        eprintln!("{notice}");
+    }
+
     match cli.command {
         Command::Init { shell } => shell_cmd::init(&shell),
 
@@ -148,6 +157,8 @@ pub fn dispatch(cli: Cli) -> Result<()> {
             ctx.ensure_global()?;
             ui::run(&mut ctx)
         }
+
+        Command::Update { force } => update_cmd::run(force),
 
         // The shell integration's private entry point. `args` is the original
         // command line with `__shell` stripped, so the first element decides.

@@ -1,0 +1,91 @@
+# 打 tag（v*.*.*）时发布 release。
+#
+#   v0.1.0 -> 四个平台的二进制 + SHA256SUMS
+#
+# install.sh 和 `envpick update` 都从这些资产下载，而且都**强制**校验 SHA256 ——
+# 所以 SHA256SUMS 必须和二进制一起上传，不能少。
+#
+# 版本号只有 Cargo.toml 一个来源。tag 与它不一致时直接失败：一个自称 v0.2.0
+# 而二进制报告 0.1.0 的 release，会让 `envpick update` 永远认为有新版。
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # tag 和 Cargo.toml 对不上就别发。放在单独一步，好让失败原因一眼看到。
+  verify-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches Cargo.toml
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          IN_CARGO="$(sed -n 's/^version *= *"\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "tag=${TAG}  Cargo.toml=${IN_CARGO}"
+          [ "$TAG" = "$IN_CARGO" ] || {
+            echo "::error::tag ${GITHUB_REF_NAME} 与 Cargo.toml 的 ${IN_CARGO} 不一致"
+            exit 1
+          }
+
+  build:
+    needs: verify-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      # 资产名必须和 install.sh 的 asset_name() 以及 src/update.rs 的
+      # asset_name() 完全一致。两边各写一份是刻意的：Rust 那份要在没有脚本的
+      # 情况下自己更新，脚本那份要在没有二进制的情况下自己下载。
+      - name: Stage asset
+        run: |
+          cp "target/${{ matrix.target }}/release/envpick" "envpick-${{ matrix.target }}"
+          "envpick-${{ matrix.target }}" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: envpick-${{ matrix.target }}
+          path: envpick-${{ matrix.target }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum envpick-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/envpick-*
+            dist/SHA256SUMS
+          generate_release_notes: true
