@@ -1,0 +1,5 @@
+/target
+
+# Agent session scratch: state files, checkpoints, replay logs. Regenerated
+# locally and meaningless to anyone else.
+/.omc/
