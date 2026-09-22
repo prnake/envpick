@@ -31,7 +31,15 @@ rand = "0.10"
 zeroize = { version = "1", features = ["derive"] }
 
 # http
-ureq = "3"
+#
+# `socks-proxy` is not optional in practice. ureq's default feature set reads
+# `http_proxy`/`https_proxy` but not `all_proxy`, and a shell with only
+# `all_proxy=socks5://…` set — a very common arrangement for people who need a
+# proxy at all — then gets a direct connection that times out. Since every sync
+# and every update check goes through this client, that turns "GitHub is
+# reachable" into "this tool does not work", with an error that blames the
+# network.
+ureq = { version = "3", features = ["socks-proxy"] }
 
 # misc
 unicode-width = "0.2"

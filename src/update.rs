@@ -326,7 +326,25 @@ pub fn asset_name() -> Option<&'static str> {
     }
 }
 
+/// The download URL for one asset of one release.
+///
+/// Split out from [`download_verified`] so the `v` handling can be tested
+/// without a network. It is the one part of that function that can be wrong
+/// while looking right — and it was: the comparison path strips the prefix, and
+/// passing that stripped form through to the asset URL 404s on a release that
+/// plainly exists.
+fn asset_url(tag: &str, name: &str) -> String {
+    let tag = if tag.starts_with('v') {
+        tag.to_string()
+    } else {
+        format!("v{tag}")
+    };
+    format!("{}/{}/releases/download/{}/{}", gh_base(), REPO, tag, name)
+}
+
 /// Download `asset` for `tag` into `dir`, verifying it against `SHA256SUMS`.
+///
+/// `tag` may be spelled either way; [`asset_url`] restores the `v`.
 ///
 /// The checksum is not optional. The binary being installed is one the user
 /// will run on every shell start, and it arrives over the network; a manifest
@@ -335,7 +353,6 @@ pub fn asset_name() -> Option<&'static str> {
 /// fail silently — there the cost of being wrong is a stale version number,
 /// here it is executing someone else's code.)
 pub fn download_verified(tag: &str, asset: &str, dir: &std::path::Path) -> Result<PathBuf> {
-    let base = format!("{}/{}/releases/download/{}", gh_base(), REPO, tag);
     let config = ureq::Agent::config_builder()
         .timeout_global(Some(std::time::Duration::from_secs(300)))
         .timeout_connect(Some(std::time::Duration::from_secs(10)))
@@ -344,7 +361,7 @@ pub fn download_verified(tag: &str, asset: &str, dir: &std::path::Path) -> Resul
 
     let fetch = |name: &str| -> Result<Vec<u8>> {
         let mut resp = agent
-            .get(format!("{base}/{name}"))
+            .get(asset_url(tag, name))
             .call()
             .with_context(|| format!("下载 {name} 失败（release {tag} 里可能没有这个资产）"))?;
         let mut buf = Vec::new();
@@ -652,6 +669,25 @@ cccc3333 *envpick-x86_64-apple-darwin
             expected_hash(manifest, "envpick-aarch64-apple-darwin").as_deref(),
             Some("abcdef12")
         );
+    }
+
+    /// The `v` is the whole point. The tag arrives stripped, because that is
+    /// what comparison wants; the asset URL wants it back. Getting this wrong
+    /// produces a 404 on a release that exists, and the error message points at
+    /// a missing asset rather than at the URL — which is how it survived the
+    /// first live run.
+    #[test]
+    fn the_asset_url_keeps_the_v_that_comparison_strips() {
+        let url = asset_url("0.1.0", "SHA256SUMS");
+        assert!(
+            url.contains("/releases/download/v0.1.0/SHA256SUMS"),
+            "wrong URL: {url}"
+        );
+        // Already prefixed is not double-prefixed.
+        assert_eq!(url, asset_url("v0.1.0", "SHA256SUMS"));
+        // And the comparison type really does strip it, which is why the two
+        // forms exist.
+        assert_eq!(Version::parse("v0.1.0").unwrap().as_str(), "0.1.0");
     }
 
     /// The digest itself has to be real SHA-256, not a stand-in: this value is

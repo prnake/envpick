@@ -49,6 +49,29 @@ pub fn mock(responses: Vec<(u16, String)>) -> Mock {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     listener.set_nonblocking(true).unwrap();
+
+    // Point the loopback at the mock, overriding whatever proxy the developer's
+    // shell exports. Without this the tests pass on a machine with no proxy and
+    // fail on one that has `all_proxy`/`https_proxy` set: ureq honours the
+    // environment, the request goes to the proxy, and the mock sees a
+    // connection that never sends anything — reported as "Peer disconnected",
+    // which says nothing about the real cause.
+    //
+    // `localhost` rather than the literal address, because that is the spelling
+    // the de-facto convention covers. This is a process-wide write, so it is
+    // done once, before any client is built; every test in this crate talks to
+    // the mock and to nothing else, so nothing is being redirected that wanted
+    // the network.
+    static NO_PROXY: std::sync::Once = std::sync::Once::new();
+    NO_PROXY.call_once(|| {
+        // SAFETY: set before any client is constructed, from a single call
+        // site guarded by `Once`, and the value is a plain ASCII list.
+        unsafe {
+            std::env::set_var("no_proxy", "localhost,127.0.0.1");
+            std::env::set_var("NO_PROXY", "localhost,127.0.0.1");
+        }
+    });
+
     let seen = Arc::new(Mutex::new(Vec::new()));
     let stop = Arc::new(AtomicBool::new(false));
 
