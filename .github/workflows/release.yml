@@ -50,6 +50,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 显式装目标平台。`macos-latest` 现在是 arm64，所以 x86_64-apple-darwin
+      # 属于交叉编译，标准 runner 上并没有预装这个 target —— 不装就会以
+      # `can't find crate for core` 失败，而那个报错完全看不出是这个原因。
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
       - name: Build
         run: cargo build --release --locked --target ${{ matrix.target }}
 
@@ -59,7 +65,9 @@ jobs:
       - name: Stage asset
         run: |
           cp "target/${{ matrix.target }}/release/envpick" "envpick-${{ matrix.target }}"
-          "envpick-${{ matrix.target }}" --version
+          # `./` is load-bearing: without it the shell looks for the file on
+          # PATH, and a bare `envpick-x86_64-...` is not there.
+          "./envpick-${{ matrix.target }}" --version
 
       - uses: actions/upload-artifact@v4
         with:
